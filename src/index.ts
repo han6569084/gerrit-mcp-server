@@ -79,6 +79,16 @@ const SyncGerritSchema = z.object({
   changeId: z.string().optional(),
 });
 
+const SubmitChangesSchema = z.object({
+  changeIds: z.array(z.string()),
+});
+
+const BatchReviewSubmitSchema = z.object({
+  topic: z.string(),
+  voteVerified: z.number().default(1),
+  voteReview: z.number().default(2),
+});
+
 // Register tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -121,6 +131,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["changeId"],
+        },
+      },
+      {
+        name: "submit_changes",
+        description: "Submit (merge) one or more Gerrit changes",
+        inputSchema: {
+          type: "object",
+          properties: {
+            changeIds: { type: "array", items: { type: "string" }, description: "Array of change IDs to submit" },
+          },
+          required: ["changeIds"],
+        },
+      },
+      {
+        name: "batch_review_submit_by_topic",
+        description: "Vote +1/+2 and then submit all open changes in a topic",
+        inputSchema: {
+          type: "object",
+          properties: {
+            topic: { type: "string", description: "The Gerrit topic name" },
+            voteVerified: { type: "number", description: "Verified score", default: 1 },
+            voteReview: { type: "number", description: "Code-Review score", default: 2 },
+          },
+          required: ["topic"],
         },
       },
       {
@@ -176,6 +210,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
         return {
           content: [{ type: "text", text: `Successfully posted review to ${changeId}` }],
+        };
+      }
+
+      case "submit_changes": {
+        const { changeIds } = SubmitChangesSchema.parse(args);
+        const results = [];
+        for (const changeId of changeIds) {
+          try {
+            await gerritApi.post(`/changes/${changeId}/submit`, { wait_for_merge: true });
+            results.push(`✓ Submitted ${changeId}`);
+          } catch (e: any) {
+            results.push(`✗ Failed ${changeId}: ${e.response?.data || e.message}`);
+          }
+        }
+        return {
+          content: [{ type: "text", text: results.join("\n") }],
+        };
+      }
+
+      case "batch_review_submit_by_topic": {
+        const { topic, voteVerified, voteReview } = BatchReviewSubmitSchema.parse(args);
+        const listResp = await gerritApi.get("/changes/", {
+          params: { q: `topic:"${topic}" status:open` },
+        });
+
+        const changes = listResp.data as any[];
+        if (!changes || changes.length === 0) {
+          return { content: [{ type: "text", text: `No open changes found for topic: ${topic}` }] };
+        }
+
+        const results = [];
+        for (const change of changes) {
+          const changeId = change._number;
+          try {
+            // 1. Vote
+            await gerritApi.post(`/changes/${changeId}/revisions/current/review`, {
+              labels: { "Verified": voteVerified, "Code-Review": voteReview },
+              message: "Batch review and submit by MCP Server",
+            });
+            // 2. Submit
+            await new Promise(resolve => setTimeout(resolve, 500)); // Small delay
+            await gerritApi.post(`/changes/${changeId}/submit`, { wait_for_merge: true });
+            results.push(`✓ Processed ${changeId}: ${change.subject}`);
+          } catch (e: any) {
+            results.push(`✗ Failed ${changeId}: ${e.response?.data || e.message}`);
+          }
+        }
+        return {
+          content: [{ type: "text", text: results.join("\n") }],
         };
       }
 

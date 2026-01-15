@@ -1,7 +1,7 @@
 {
   "name": "gerrit-mcp-server",
   "version": "1.0.0",
-  "description": "MCP server for Gerrit integration",
+  "description": "MCP server for Gerrit integration, supporting Claude Haiku 4.5 and other AI clients",
   "main": "build/index.js",
   "type": "module",
   "scripts": {

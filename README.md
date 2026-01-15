@@ -1,6 +1,6 @@
 # Gerrit MCP Server
 
-这是一个用于与 Gerrit 代码审查系统集成的 Model Context Protocol (MCP) 服务端。它允许 GitHub Copilot 等 AI 助手直接查询、下载和评价 Gerrit 上的变更。
+这是一个用于与 Gerrit 代码审查系统集成的 Model Context Protocol (MCP) 服务端。它允许 GitHub Copilot、Claude Haiku 4.5 等 AI 助手直接查询、下载和评价 Gerrit 上的变更。
 
 ## 功能特性 (Capabilities)
 
